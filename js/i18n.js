@@ -57,6 +57,7 @@ const DICT = {
   "home.club.pitch": ["A point for every dollar, a sauna on your birthday, and treatments that come back to you.",
                       "Un point par dollar, un sauna pour votre anniversaire, et des soins qui vous reviennent."],
   "home.club.balance": ["{n} points", "{n} points"],
+  "home.club.balance.one": ["{n} point", "{n} point"],
   "home.about": ["Our mission", "Notre mission"],
   "home.about.body": [
     "Each guest receives a high quality spa experience by skilled and caring professionals in a tranquil environment that promotes stress reduction and life balance. We strive to create an oasis where you can leave the world behind and enter into a state of well-being.",
@@ -79,6 +80,7 @@ const DICT = {
   "svc.packages": ["Packages", "Forfaits"],
   "svc.none": ["Nothing matches that.", "Aucun résultat."],
   "svc.count": ["{n} treatments", "{n} soins"],
+  "svc.count.one": ["{n} treatment", "{n} soin"],
   "svc.from": ["from {p}", "à partir de {p}"],
   "svc.free": ["Free", "Gratuit"],
   "svc.quoted": ["At consultation", "En consultation"],
@@ -91,6 +93,7 @@ const DICT = {
   "svc.added": ["Added", "Ajouté"],
   "svc.remove": ["Remove", "Retirer"],
   "svc.earn": ["Earn {n} points", "Gagnez {n} points"],
+  "svc.earn.one": ["Earn {n} point", "Gagnez {n} point"],
   "svc.consultFirst": ["Book the free consultation", "Réserver la consultation gratuite"],
   "svc.consultNote": ["Pricing for this is set with you at a free 15-minute consultation.",
                       "Le prix est établi avec vous lors d'une consultation gratuite de 15 minutes."],
@@ -166,6 +169,7 @@ const DICT = {
   "bk.redeem": ["Use a reward", "Utiliser une récompense"],
   "bk.redeem.none": ["Nothing to use yet", "Rien à utiliser pour l'instant"],
   "bk.earnNote": ["This visit earns {n} points", "Cette visite rapporte {n} points"],
+  "bk.earnNote.one": ["This visit earns {n} point", "Cette visite rapporte {n} point"],
   "bk.confirm": ["Confirm booking", "Confirmer la réservation"],
   "bk.confirming": ["Confirming…", "Confirmation…"],
   "bk.done": ["You're booked", "C'est réservé"],
@@ -239,6 +243,7 @@ const DICT = {
   "you.birthday.why": ["For your birthday sauna. We only keep the day and month.",
                        "Pour votre sauna d'anniversaire. Nous ne gardons que le jour et le mois."],
   "you.visits": ["{n} visits", "{n} visites"],
+  "you.visits.one": ["{n} visit", "{n} visite"],
   "you.spent": ["{p} of treatments", "{p} de soins"],
   "you.demo": ["Fill with sample history", "Remplir avec un historique d'exemple"],
   "you.demo.sub": ["For the preview only — invents a year of visits so the club has something to show.",
@@ -251,6 +256,7 @@ const DICT = {
   "ap.today": ["Today", "Aujourd'hui"],
   "ap.tomorrow": ["Tomorrow", "Demain"],
   "ap.in": ["in {n} days", "dans {n} jours"],
+  "ap.in.one": ["in {n} day", "dans {n} jour"],
   "ap.with": ["with {n}", "avec {n}"],
   "ap.reschedule": ["Reschedule", "Reporter"],
   "ap.cancel": ["Cancel appointment", "Annuler le rendez-vous"],
@@ -260,6 +266,7 @@ const DICT = {
                      "Nous sommes à moins de {n} heures. Merci de nous appeler."],
   "ap.keep": ["Keep it", "Le conserver"],
   "ap.earned": ["Earned {n} points", "{n} points gagnés"],
+  "ap.earned.one": ["Earned {n} point", "{n} point gagné"],
 
   /* ------------------------------------------------------------ misc */
   "gift.title": ["Gift cards", "Cartes-cadeaux"],
@@ -322,9 +329,17 @@ export function setLang(next) {
   document.dispatchEvent(new CustomEvent("lang:change", { detail: { lang } }));
 }
 
-/** t("bk.step", { n: 2, m: 6 }) */
+/**
+ * t("bk.step", { n: 2, m: 6 })
+ *
+ * Where a string counts something, pass `n`. A `<key>.one` entry is used when
+ * n is exactly one, so nothing reads "1 treatments" or "1 soins" — which is
+ * the sort of thing a client notices immediately and trusts nothing after.
+ * Both languages here break the same way at one, so one extra row covers both.
+ */
 export function t(key, vars) {
-  const row = DICT[key];
+  const one = vars && Number(vars.n) === 1 && DICT[key + ".one"];
+  const row = one || DICT[key];
   let s = row ? (row[LANGS.indexOf(lang)] ?? row[0]) : key;
   if (vars) for (const [k, v] of Object.entries(vars)) s = s.split(`{${k}}`).join(v);
   return s;

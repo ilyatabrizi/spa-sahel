@@ -337,6 +337,8 @@ def main():
         page.wait_for_timeout(400)
         check("a chosen treatment shows in the visit", "Phytomer Facial" in page.inner_text("#chosen"))
         check("the dock shows its price", "$85" in page.inner_text("#bookdock"))
+        check("one treatment is singular", "1 treatment" in page.inner_text("#bookdock")
+              and "1 treatments" not in page.inner_text("#bookdock"), page.inner_text("#bookdock"))
         check("the dock shows the time", "1 hr 15" in page.inner_text("#bookdock"))
         page.click('.chip[data-g="massage"]')
         page.wait_for_timeout(300)
@@ -344,6 +346,7 @@ def main():
         page.wait_for_timeout(400)
         check("two treatments total correctly", "$185" in page.inner_text("#bookdock"),
               page.inner_text("#bookdock"))
+        check("two treatments are plural", "2 treatments" in page.inner_text("#bookdock"))
         check("and their time adds up", "2 hr 15" in page.inner_text("#bookdock"),
               page.inner_text("#bookdock"))
         page.click("#bookdock button")
@@ -577,6 +580,12 @@ def main():
 
         open_at("#/book")
         check("the booking is in French", "Que souhaitez-vous" in page.inner_text(".screen"))
+        page.click('.row[data-id="f-micro"]')
+        page.wait_for_timeout(400)
+        check("one treatment is singular in French too", "1 soin" in page.inner_text("#bookdock")
+              and "1 soins" not in page.inner_text("#bookdock"), page.inner_text("#bookdock"))
+        page.click('.row[data-id="f-micro"]')
+        page.wait_for_timeout(300)
         check("the step counter is in French", "ÉTAPE 1 SUR 6" in page.inner_text(".step-kicker").upper())
         page.click('.row[data-id="f-phyto"]')
         page.wait_for_timeout(300)
