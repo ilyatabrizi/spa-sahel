@@ -67,7 +67,7 @@ as an iPhone app. **Jost** for display — a geometric sans matching the one in
 their own Instagram posts.
 
 **Glass, properly.** The bars use a transparent tint with `saturate(185%)` and a
-`brightness()` clamp, not an opaque panel with a blur behind it. Three traps are
+`brightness()` clamp, not an opaque panel with a blur behind it. Four traps are
 load-bearing and are marked in the source where they bite:
 
 1. `backdrop-filter` samples **nothing** if any *ancestor* is transformed.
