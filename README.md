@@ -11,7 +11,7 @@ a hash router and a service worker. Open `index.html` through `serve.py` and it 
 
 ```bash
 python3 serve.py          # http://localhost:8211
-python3 e2e.py            # 176 checks against the local preview
+python3 e2e.py            # 243 checks against the local preview
 python3 build.py          # stamp the build — run before every deploy
 ```
 
@@ -70,18 +70,27 @@ their own Instagram posts.
 `brightness()` clamp, not an opaque panel with a blur behind it. Three traps are
 load-bearing and are marked in the source where they bite:
 
-1. `backdrop-filter` samples **nothing** if any *ancestor* is transformed. Both
-   bars are centred with flexbox, never `translateX(-50%)`, and `body` is pinned
-   to `transform: none`. This one bit during the build and the e2e suite now
-   walks every glass surface's ancestors on every run.
-2. A folding bar must not measure itself from the row it is shrinking.
-3. Setting `location.hash` to the hash you already have fires no `hashchange`.
+1. `backdrop-filter` samples **nothing** if any *ancestor* is transformed.
+   `#tabbar` never moves — only the capsule and the call button do, each by its
+   own transform — and `body` is pinned to `transform: none`. The suite walks
+   the ancestors of every glass element on the page, chrome or content.
+2. A filled entry animation (`animation: … both`) leaves an identity matrix on
+   the screen after it ends, and that counts as a transform. Screens animate
+   with `backwards`.
+3. No two stylesheet rules may compete for the bar's geometry. The first
+   version had two of equal specificity setting the capsule's width, so the
+   bar hid three tabs inside a capsule that never narrowed.
+4. Setting `location.hash` to the hash you already have fires no `hashchange`.
 
-**The nav bar** is an iOS tab bar: four tabs on a floating capsule, a lens that
-springs between them and follows a dragged finger, and a fold — scroll down and
-it collapses to the tab you are on, scroll up and it opens again. The top bar
-carries no material over the hero photograph and takes on glass and a compact
-title once the page title has scrolled by.
+**The nav bar** is iOS 26's minimising tab bar: four tabs on a floating capsule
+beside a round call button, and a lens that springs between tabs and follows a
+dragged finger. Scroll down a long page and the capsule shrinks to the tab you
+are on at the leading edge while the call button moves to the trailing edge;
+scroll up, or tap it, and both return. Every position is computed in
+`js/chrome.js` and handed to CSS as a custom property. The top bar carries no
+material over a photograph — its controls sit on a soft scroll-edge fade — and
+takes on glass and a centred compact title once the photo has gone by; on a
+plain page the glass arrives as soon as content passes under it.
 
 ---
 
@@ -110,6 +119,11 @@ profile, where it can be rescheduled or cancelled.
 
 The slot is **held for ten minutes** and really expires. Adding a treatment
 releases it, because a ninety-minute booking cannot keep a gap that fits thirty.
+
+An existing appointment moves from the profile: **Reschedule** opens the diary
+carrying it, marks the time already held, closes any time that clashes with the
+guest's other visits, and moves it in place. Inside the 24-hour window it asks
+for a call instead, the same as cancelling.
 
 ---
 
@@ -159,7 +173,7 @@ scripts/
   trace_logo.py         their logo → SVG
   build_assets.py       their photographs → WebP, and the app icons
   src/                  the originals
-e2e.py                  176 checks
+e2e.py                  243 checks
 ```
 
 ---
