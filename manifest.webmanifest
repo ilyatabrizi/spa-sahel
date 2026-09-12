@@ -1,0 +1,24 @@
+{
+  "name": "Spa Sahel",
+  "short_name": "Spa Sahel",
+  "description": "Facials, massage, laser, waxing and steam sauna at 1117 Saint-Catherine St W, Montreal.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F2F3F6",
+  "theme_color": "#F2F3F6",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["health", "lifestyle", "beauty"],
+  "icons": [
+    { "src": "assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "assets/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Book an appointment", "url": "./#/book", "icons": [{ "src": "assets/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Treatments", "url": "./#/services" },
+    { "name": "You", "url": "./#/you" }
+  ]
+}
