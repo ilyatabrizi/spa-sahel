@@ -53,6 +53,10 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible" && store.reconcile()) render({ keepScroll: true });
 });
 
+// iOS applies :active only once the document listens for touches. Without this
+// every pressed state in the stylesheet is invisible on an iPhone.
+document.addEventListener("touchstart", () => {}, { passive: true });
+
 initChrome();
 const first = startRouter();
 runBoot(first);

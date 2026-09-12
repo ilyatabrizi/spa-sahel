@@ -78,6 +78,8 @@ function basketLine() {
 
 /* =========================================================== 1 · what */
 export function bookStep1(_p, query) {
+  // a move that was walked away from is not a basket
+  if (basket.get().reschedule) basket.reset();
   // arriving from a treatment or a package page drops it straight in
   if (query.s && service(query.s)) basket.add(query.s);
   if (query.p && pkg(query.p)) basket.addPackage(query.p, query.o != null ? Number(query.o) : null);
@@ -131,28 +133,47 @@ export function bookStep1(_p, query) {
         list.innerHTML = groupList(current);
       });
 
+      // Keep what the finger is on under the finger. The visit summary sits above
+      // the list and grows a row with every choice, so without this each tap slid
+      // the list down and left a different treatment beneath the thumb.
+      const holdStill = (anchor, change) => {
+        const before = anchor.getBoundingClientRect().top;
+        change();
+        if (!anchor.isConnected) return;
+        const moved = anchor.getBoundingClientRect().top - before;
+        if (Math.abs(moved) > 1) scrollBy({ top: moved, behavior: "instant" });
+      };
+
       list.addEventListener("click", (e) => {
         const row = e.target.closest("[data-id]");
         if (!row) return;
-        const s = service(row.dataset.id);
-        if (s?.price == null) { go(`#/service/${s.id}`); return; }
-        if (!basket.has(row.dataset.id) && basket.count() >= BOOKING.maxServices) {
+        const id = row.dataset.id;
+        const s = service(id);
+        if (s?.price == null) { go(`#/service/${id}`); return; }
+        if (!basket.has(id) && basket.count() >= BOOKING.maxServices) {
           toast(t("bk.pick.sub", { n: BOOKING.maxServices }), "info");
           return;
         }
-        basket.toggle(row.dataset.id);
+        holdStill(row, () => {
+          basket.toggle(id);
+          const on = String(basket.has(id));
+          // in place, not a re-render: the row keeps focus and nothing reflows
+          row.setAttribute("aria-pressed", on);
+          row.querySelector(".check").setAttribute("aria-checked", on);
+          chosen.innerHTML = chosenBlock();
+        });
         haptic(6);
-        list.innerHTML = groupList(current);
-        chosen.innerHTML = chosenBlock();
         repaintDock();
       });
 
       chosen.addEventListener("click", (e) => {
         const del = e.target.closest("[data-drop]");
         if (!del) return;
-        basket.remove(del.dataset.drop);
-        chosen.innerHTML = chosenBlock();
-        list.innerHTML = groupList(current);
+        holdStill($("#g-chips", screen), () => {
+          basket.remove(del.dataset.drop);
+          chosen.innerHTML = chosenBlock();
+          list.innerHTML = groupList(current);
+        });
         repaintDock();
       });
     },
@@ -251,17 +272,42 @@ export function bookStep2() {
 }
 
 /* ========================================================= 3 · when */
-export function bookStep3() {
+/** The head for moving an appointment — no progress dots, because there are no steps. */
+function moveHead(b) {
+  const w = new Date(b.when);
+  const now = `${dateLong(w)} · ${clock(w.getHours() * 60 + w.getMinutes())}`;
+  return `<div class="step-head" style="padding-top:12px">
+      <div class="step-kicker">${esc(t("ap.reschedule"))} · ${esc(b.ref)}</div>
+      <h1 class="step-title">${esc(t("ap.resched.title"))}</h1>
+      <p class="step-sub">${esc(t("ap.resched.now", { d: now }))}</p>
+    </div>`;
+}
+
+export function bookStep3(_p, query = {}) {
+  // Moving an appointment that already exists: the link carries it, and the
+  // draft is loaded from it once. Arriving without that link while a move is
+  // half-done means it was abandoned — start clean rather than resume it.
+  if (query.r) {
+    const b = store.booking(query.r);
+    if (!b || b.status !== "confirmed" || b.when <= Date.now()) return redirect("#/you");
+    if (basket.get().reschedule !== b.id) basket.startReschedule(b, store.member());
+  } else if (basket.get().reschedule) {
+    basket.reset();
+    return redirect("#/book");
+  }
   if (!basket.count()) return redirect("#/book");
   const d = basket.get();
+  const moving = d.reschedule ? store.booking(d.reschedule) : null;
   const opts = { minutes: basket.minutes(), groups: basket.groups(), therapist: d.therapist };
   const cap = basket.latestStart();
   const today = startOfDay();
-  const land = d.day ? fromDayKey(d.day) : (firstOpenDay(today, opts) || today);
+  const land = d.day ? fromDayKey(d.day)
+    : moving ? startOfDay(new Date(moving.when))
+    : (firstOpenDay(today, opts) || today);
   const days = calendar(today, BOOKING.horizonDays, opts);
 
   const html = `
-  ${stepHead(3, t("bk.s3"), t("bk.when"), t("bk.when.sub", { n: BOOKING.holdMinutes }))}
+  ${moving ? moveHead(moving) : stepHead(3, t("bk.s3"), t("bk.when"), t("bk.when.sub", { n: BOOKING.holdMinutes }))}
   <div class="wrap" style="margin-top:16px">
     <div class="cal-month" id="cal-month"></div>
     <div class="cal" id="cal">
@@ -287,6 +333,17 @@ export function bookStep3() {
       let cleanupDock = () => {};
       onCleanup(() => cleanupDock());
 
+      const commitMove = () => {
+        const at = basket.get().slot;
+        if (at == null || !moving) return;
+        const when = atMinute(day, at).getTime();
+        store.rescheduleBooking(moving.id, when);
+        basket.reset();
+        haptic([10, 40, 16]);
+        toast(t("ap.resched.done", { d: `${dateShort(when)} · ${clock(at)}` }), "calendar");
+        go(`#/appointment/${moving.id}`);
+      };
+
       const paintMonth = () => {
         const d0 = fromDayKey(day);
         monthLabel.textContent = `${monthName(d0.getMonth())} ${d0.getFullYear()}`;
@@ -298,9 +355,9 @@ export function bookStep3() {
         cleanupDock = dock({
           line: chosen ? esc(`${dateShort(fromDayKey(day))} · ${clock(basket.get().slot)}`) : base.line,
           sub: chosen ? base.sub : esc(t("bk.err.slot")),
-          cta: t("nav.continue"),
+          cta: moving ? t("ap.resched.cta") : t("nav.continue"),
           enabled: chosen,
-          onGo: () => go("#/book/details"),
+          onGo: () => (moving ? commitMove() : go("#/book/details")),
         });
       };
       const paintSlots = () => {
@@ -309,7 +366,21 @@ export function bookStep3() {
           out.innerHTML = `<div class="note" style="margin-top:18px">${icon("info")}<div>${esc(t("bk.closedDay"))}</div></div>`;
           return;
         }
-        const all = slotsOn(date, opts).filter((s) => cap == null || s.at <= cap);
+        // A guest cannot be in two rooms at once: her other appointments close
+        // the times they overlap. When moving one, its own time is shown as hers.
+        const others = store.upcoming().filter((b) => b.id !== d.reschedule);
+        const clashes = (at) => others.some((b) => {
+          const w = new Date(b.when);
+          if (dayKey(w) !== day) return false;
+          const start = w.getHours() * 60 + w.getMinutes();
+          return at < start + (b.minutes || 60) && start < at + opts.minutes;
+        });
+        const nowAt = moving && dayKey(new Date(moving.when)) === day
+          ? new Date(moving.when).getHours() * 60 + new Date(moving.when).getMinutes() : null;
+        const all = slotsOn(date, opts)
+          .filter((s) => cap == null || s.at <= cap)
+          .map((s) => (s.at === nowAt ? { ...s, free: false, current: true }
+            : clashes(s.at) ? { ...s, free: false } : s));
         if (!all.length) {
           out.innerHTML = `<div class="empty">${icon("clock")}<div>${esc(t("bk.noslots"))}</div></div>`;
           return;
@@ -319,7 +390,8 @@ export function bookStep3() {
           const list = g[key];
           if (!list.length) return "";
           return `<div class="slot-group"><h3>${esc(label)}</h3><div class="slots">
-            ${list.map((s) => `<button class="slot" data-at="${s.at}" ${s.free ? "" : "disabled"}
+            ${list.map((s) => `<button class="slot${s.current ? " current" : ""}" data-at="${s.at}" ${s.free ? "" : "disabled"}
+              ${s.current ? `title="${esc(t("ap.resched.current"))}" aria-label="${esc(`${clock(s.at)}, ${t("ap.resched.current")}`)}"` : ""}
               aria-pressed="${basket.get().day === day && basket.get().slot === s.at}">${esc(clock(s.at))}</button>`).join("")}
           </div></div>`;
         };
@@ -352,7 +424,7 @@ export function bookStep3() {
       paintDock();
       // land the strip on the chosen day rather than at the far left
       const sel = cal.querySelector('[aria-pressed="true"]');
-      if (sel) cal.scrollTo({ left: Math.max(0, sel.offsetLeft - 100), behavior: "instant" });
+      if (sel) cal.scrollTo({ left: Math.max(0, sel.offsetLeft - (cal.clientWidth - sel.offsetWidth) / 2), behavior: "instant" });
       // the month label follows the strip as it is scrolled
       const onScroll = () => {
         const mid = cal.scrollLeft + cal.clientWidth / 2;
@@ -392,7 +464,7 @@ export function bookStep4() {
       <div class="field">
         <label for="f-email">${esc(t("bk.email"))}</label>
         <input id="f-email" name="email" type="email" inputmode="email" autocomplete="email"
-          value="${esc(email)}" placeholder="nom@exemple.com">
+          value="${esc(email)}" placeholder="${esc(t("bk.email.ph"))}">
       </div>
     </div>
 
@@ -718,11 +790,12 @@ export function bookStep6() {
             rewardId: d.rewardId,
             promo: d.promo,
           });
-          if (!store.isKnown() && d.name) {
-            store.join({ name: d.name, phone: d.phone, email: d.email });
-          } else if (d.name) {
-            store.setProfile({ name: d.name, phone: d.phone, email: d.email });
-          }
+          // only what was actually typed — an email left blank on this booking
+          // must not wipe the one the profile already has
+          const given = Object.fromEntries(Object.entries({ name: d.name, phone: d.phone, email: d.email })
+            .filter(([, v]) => String(v || "").trim()));
+          if (!store.isKnown() && given.name) store.join(given);
+          else if (Object.keys(given).length) store.setProfile(given);
           basket.reset();
           haptic([10, 40, 16]);
           go(`#/booked/${booking.id}`);

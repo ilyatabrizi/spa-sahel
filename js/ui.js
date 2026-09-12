@@ -48,6 +48,8 @@ export function sheet({ title = "", body = "", foot = "", onMount, onClose } = {
     <div class="sheet-body">${body}</div>
     ${foot ? `<div class="sheet-foot">${foot}</div>` : ""}`;
   document.body.append(el);
+  // hold the page still behind the sheet, so scrolling the sheet scrolls the sheet
+  document.documentElement.classList.add("sheet-open");
   requestAnimationFrame(() => {
     el.classList.add("on");
     scrim.classList.add("on");
@@ -57,6 +59,7 @@ export function sheet({ title = "", body = "", foot = "", onMount, onClose } = {
     openSheet = null;
     el.classList.remove("on");
     scrim.classList.remove("on");
+    document.documentElement.classList.remove("sheet-open");
     setTimeout(() => el.remove(), 480);
     onClose?.();
   };

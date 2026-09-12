@@ -5,7 +5,7 @@
 // and a treatment they price at a consultation offers the free fifteen minutes
 // instead of a Book button that would be a lie.
 
-import { CLUB } from "./../config.js";
+import { BOOKING, CLUB } from "./../config.js";
 import { GROUPS, PACKAGES, SERVICES, group as groupOf, lengthIsOurs, lengthOf, pkg, service } from "./../data.js";
 import { duration, money, t, tr } from "./../i18n.js";
 import { icon } from "./../icons.js";
@@ -78,11 +78,29 @@ export function serviceView({ id }) {
     tone: s.photo ? "dark" : "light",
     mount(screen, onCleanup) {
       onCleanup(revealOn(screen));
-      $("[data-add]", screen)?.addEventListener("click", (e) => {
-        const added = basket.add(s.id);
-        toast(added ? `${tr(s.name)} · ${t("svc.added")}` : t("bk.pick.sub", { n: 4 }));
-        e.currentTarget.innerHTML = icon("check") + `<span>${esc(t("svc.added"))}</span>`;
-      });
+      // Add is a toggle, and it says what actually happened. It used to answer an
+      // already-added treatment with "stack up to 4", which was not the reason.
+      const add = $("[data-add]", screen);
+      const paintAdd = () => {
+        const on = basket.has(s.id);
+        add.setAttribute("aria-pressed", String(on));
+        add.innerHTML = icon(on ? "check" : "plus") + `<span>${esc(t(on ? "svc.added" : "svc.add"))}</span>`;
+      };
+      if (add) {
+        paintAdd();
+        add.addEventListener("click", () => {
+          if (basket.has(s.id)) {
+            basket.remove(s.id);
+            toast(`${tr(s.name)} · ${t("svc.removed")}`, "close");
+          } else if (basket.count() >= BOOKING.maxServices) {
+            toast(t("bk.pick.sub", { n: BOOKING.maxServices }), "info");
+          } else {
+            basket.add(s.id);
+            toast(`${tr(s.name)} · ${t("svc.added")}`);
+          }
+          paintAdd();
+        });
+      }
     },
   };
 }

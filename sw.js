@@ -17,7 +17,7 @@
 //
 // build.py writes VERSION and both lists; do not edit them by hand.
 
-const VERSION = "sahel-91ec5a56f8";
+const VERSION = "sahel-938055b53a";
 const DEV = ["localhost", "127.0.0.1"].includes(location.hostname);
 const MARKER = "./__installed__";
 

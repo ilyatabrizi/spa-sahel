@@ -116,7 +116,7 @@ export default function home() {
     <div class="hero-scrim"></div>
     <div class="hero-glow"></div>
     <div class="hero-logo">${logoSVG("hero", "logo")}</div>
-    <div class="hero-word">Spa Sahel</div>
+    <h1 class="hero-word">Spa Sahel</h1>
     <div class="hero-door"><i class="dot ${door.on ? "on" : ""}"></i><span>${esc(door.text)}</span></div>
     <div class="hero-line">${esc(t("home.hero.line"))}</div>
     <div class="hero-tag">${esc(tr(BUSINESS.tagline))}</div>
@@ -131,10 +131,10 @@ export default function home() {
 
     <section style="margin-top:14px" class="reveal">
       <nav class="quick">
-        <a href="#/book"><span class="qi">${icon("calendar")}</span>${esc(t("home.quick.book"))}</a>
-        <a href="tel:${BUSINESS.phoneHref}"><span class="qi">${icon("phone")}</span>${esc(t("home.quick.call"))}</a>
-        <a href="${BUSINESS.maps}" target="_blank" rel="noopener"><span class="qi">${icon("pin")}</span>${esc(t("home.quick.map"))}</a>
-        <a href="#/gift"><span class="qi">${icon("gift")}</span>${esc(t("home.quick.gift"))}</a>
+        <a href="#/book"><span class="qi">${icon("calendar")}</span><span class="ql">${esc(t("home.quick.book"))}</span></a>
+        <a href="tel:${BUSINESS.phoneHref}"><span class="qi">${icon("phone")}</span><span class="ql">${esc(t("home.quick.call"))}</span></a>
+        <a href="${BUSINESS.maps}" target="_blank" rel="noopener"><span class="qi">${icon("pin")}</span><span class="ql">${esc(t("home.quick.map"))}</span></a>
+        <a href="#/gift"><span class="qi">${icon("gift")}</span><span class="ql">${esc(t("home.quick.gift"))}</span></a>
       </nav>
     </section>
 

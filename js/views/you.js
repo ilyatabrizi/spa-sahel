@@ -6,7 +6,7 @@
 // settings. Nothing here pretends to be a server: it says so at the bottom,
 // and "erase" really erases.
 
-import { BUSINESS, CLUB, REWARDS, THERAPISTS } from "./../config.js";
+import { BOOKING, BUSINESS, CLUB, REWARDS, THERAPISTS } from "./../config.js";
 import { clock, dateLong, dateShort, duration, greeting, money, t, tr } from "./../i18n.js";
 import { icon } from "./../icons.js";
 import { revealOn } from "./../motion.js";
@@ -344,7 +344,7 @@ function joinSheet() {
       </div>
       <div class="field">
         <label for="j-email">${esc(t("bk.email"))}</label>
-        <input id="j-email" type="email" inputmode="email" autocomplete="email" placeholder="nom@exemple.com">
+        <input id="j-email" type="email" inputmode="email" autocomplete="email" placeholder="${esc(t("bk.email.ph"))}">
       </div>
       <div class="field">
         <label for="j-bday">${esc(t("you.birthday"))}</label>
@@ -445,7 +445,7 @@ export function appointmentView({ id }) {
 
     ${canCancel ? `<div class="stack" style="margin-top:18px">
       <button class="btn btn-ghost block" data-ics>${icon("calendar")}<span>${esc(t("bk.addCal"))}</span></button>
-      <a class="btn btn-ghost block" href="#/book/when">${icon("clock")}<span>${esc(t("ap.reschedule"))}</span></a>
+      <button class="btn btn-ghost block" data-resched>${icon("clock")}<span>${esc(t("ap.reschedule"))}</span></button>
       <button class="btn btn-danger block" data-cancel>${esc(t("ap.cancel"))}</button>
       <p class="row-sub center">${esc(t("bk.policy", { n: 24 }))}</p>
     </div>` : ""}
@@ -467,6 +467,20 @@ export function appointmentView({ id }) {
           confirm: t("ap.cancel"), cancel: t("ap.keep"), danger: true,
         });
         if (yes) { store.cancelBooking(b.id); toast(t("ap.cancelled"), "close"); go("#/you"); }
+      });
+      // Reschedule used to link to the diary with an empty basket, which bounced
+      // straight to step one. It now carries the appointment, and the diary moves
+      // that appointment — inside the window it asks for a call, like cancelling.
+      $("[data-resched]", screen)?.addEventListener("click", () => {
+        if (!free) {
+          sheet({
+            title: t("ap.reschedule"),
+            body: `<p class="lede" style="padding:4px 0 14px">${esc(t("ap.resched.late", { n: BOOKING.cancelHours }))}</p>`,
+            foot: `<a class="btn btn-primary block" href="tel:${BUSINESS.phoneHref}">${esc(BUSINESS.phone)}</a>`,
+          });
+          return;
+        }
+        go(`#/book/when?r=${encodeURIComponent(b.id)}`);
       });
       $("[data-ics]", screen)?.addEventListener("click", () => downloadICS(b));
     },

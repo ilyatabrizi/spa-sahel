@@ -70,6 +70,8 @@
   --glass-line: rgba(20, 22, 26, .085);
   --glass-filter: saturate(185%) blur(22px) brightness(1.04);
   --lens: rgba(255, 255, 255, .92);
+  --lens-shadow: 0 1px 3px rgba(16, 20, 28, .13), inset 0 .5px 0 rgba(255, 255, 255, .8);
+  --tab-ink-on: #FFFFFF;   /* the cut-out lines inside a filled tab icon — the lens colour */
 
   --ok: #19894B;
   --warn: #B3590B;
@@ -98,8 +100,8 @@
   --ease: cubic-bezier(.4, 0, .2, 1);
 }
 
-:root:not([data-theme="light"]) {
-  @media (prefers-color-scheme: dark) {
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
     color-scheme: dark;
     --ground: #0B0C0E;
     --card: #17191D;
@@ -123,6 +125,8 @@
     --glass-line: rgba(255, 255, 255, .10);
     --glass-filter: saturate(180%) blur(22px) brightness(.92);
     --lens: rgba(255, 255, 255, .16);
+    --lens-shadow: inset 0 0 0 .5px rgba(255, 255, 255, .16);
+    --tab-ink-on: #3A3C40;
     --ok: #3DD07A;
     --warn: #FFB454;
     --bad: #FF6B6B;
@@ -153,6 +157,8 @@
   --glass-line: rgba(255, 255, 255, .10);
   --glass-filter: saturate(180%) blur(22px) brightness(.92);
   --lens: rgba(255, 255, 255, .16);
+  --lens-shadow: inset 0 0 0 .5px rgba(255, 255, 255, .16);
+  --tab-ink-on: #3A3C40;
   --ok: #3DD07A;
   --warn: #FFB454;
   --bad: #FF6B6B;
@@ -210,7 +216,11 @@ input, textarea { -webkit-appearance: none; appearance: none; }
 
 .screen {
   padding-bottom: calc(var(--dock) + 24px);
-  animation: screen-in .42s var(--spring) both;
+  /* backwards, not both: `both` holds the last keyframe, and translate3d → none
+     interpolates to an IDENTITY MATRIX rather than to none. That kept every
+     screen a backdrop root, so the glass on the hero and the club card blurred
+     nothing. `backwards` applies the first frame early and nothing after. */
+  animation: screen-in .42s var(--spring) backwards;
 }
 .screen.pad-top { padding-top: calc(var(--topbar-h) + var(--safe-t)); }
 .screen.flush { padding-top: 0; }
@@ -242,7 +252,6 @@ section:first-child { margin-top: 0; }
 }
 .sec-head .sub { font-size: 13.5px; color: var(--ink-3); }
 .sec-head .more { font-size: 14.5px; color: var(--tint); font-weight: 500; }
-.sec-head .more:hover { text-decoration: underline; }
 
 .title-xl {
   font-family: var(--display);
@@ -264,7 +273,7 @@ section:first-child { margin-top: 0; }
   position: fixed; inset: 0 0 auto 0; z-index: 60;
   height: calc(var(--topbar-h) + var(--safe-t));
   padding-top: var(--safe-t);
-  display: flex; align-items: center; gap: 6px;
+  display: flex; align-items: center; justify-content: space-between;
   padding-inline: 10px;
   background: transparent;
   transition: background .3s var(--ease), box-shadow .3s var(--ease);
@@ -279,19 +288,35 @@ section:first-child { margin-top: 0; }
   transition: opacity .28s var(--ease);
 }
 #topbar[data-lifted="1"]::before { opacity: 1; }
+/* Over a photograph the bar has no material, so its controls get a soft dark
+   edge to sit on instead. Content sliding under a transparent bar then dims as
+   it goes — iOS's scroll-edge effect — rather than colliding with a white chip. */
+#topbar::after {
+  content: ""; position: absolute; inset: 0 0 -18px 0; z-index: -1;
+  background: linear-gradient(180deg, rgba(8, 10, 14, .38), rgba(8, 10, 14, .14) 62%, transparent);
+  opacity: 0;
+  transition: opacity .28s var(--ease);
+  pointer-events: none;
+}
+#topbar[data-tone="dark"]::after { opacity: 1; }
 /* over the hero photograph the chrome goes white and drops its material */
 #topbar[data-tone="dark"] { color: #fff; }
 #topbar[data-tone="dark"] .tb-btn { background: rgba(255, 255, 255, .17); color: #fff; }
-#topbar[data-tone="dark"] .tb-btn:hover { background: rgba(255, 255, 255, .28); }
 
+/* Centred on the SCREEN, not in the room the controls leave: the language
+   pill is wider than the profile button, so a flex title sat 15px off centre.
+   Symmetric insets clear the wider side. */
 .tb-title {
-  flex: 1 1 auto; min-width: 0; text-align: center;
+  position: absolute; top: var(--safe-t); left: 88px; right: 88px;
+  height: var(--topbar-h); line-height: var(--topbar-h);
+  margin: 0; text-align: center;
   font-size: 16px; font-weight: 600; letter-spacing: -.015em;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   opacity: 0; transform: translateY(9px);
   transition: opacity .26s var(--ease), transform .34s var(--spring);
+  pointer-events: none;
 }
-#topbar[data-lifted="1"] .tb-title { opacity: 1; transform: none; }
+#topbar[data-titled="1"] .tb-title { opacity: 1; transform: none; }
 
 .tb-btn {
   width: 36px; height: 36px; flex: none;
@@ -301,7 +326,6 @@ section:first-child { margin-top: 0; }
   color: var(--ink);
   transition: background .18s var(--ease), transform .18s var(--spring), color .18s var(--ease);
 }
-.tb-btn:hover { background: var(--tint-soft); color: var(--tint); }
 .tb-btn:active { transform: scale(.9); }
 .tb-btn .ico { width: 20px; height: 20px; }
 .tb-btn.wide { width: auto; padding-inline: 13px; border-radius: 18px; gap: 5px; font-size: 14px; font-weight: 500; display: flex; }
@@ -328,31 +352,36 @@ section:first-child { margin-top: 0; }
 #topbar[data-tone="dark"] .lang-pill b.on { background: rgba(255, 255, 255, .95); color: #14161A; }
 
 /* ============================================================ TAB BAR
-   A floating capsule of glass. Four tabs, a lens that springs between them and
-   follows a dragged finger, and a fold: scrolling down collapses the bar to the
-   tab you are on, scrolling up opens it again.
+   iOS 26's minimising tab bar. A capsule of glass holding four tabs, a round
+   call button beside it, and a lens that springs between tabs and follows a
+   dragged finger. Scroll down a long page and the capsule shrinks to the tab
+   you are on at the leading edge while the button moves to the trailing edge.
 
-   TRAP — the capsule itself may be transformed (it is, when it folds), but
-   nothing ABOVE it in the tree may be, or the backdrop-filter stops sampling
-   and the glass turns into flat paint. That is why #tabbar is fixed to the body
-   and never animated with a keyframe that leaves fill-mode behind.
+   Every x and width comes from js/chrome.js as a custom property, and nothing
+   here competes for them. The first version had two rules of equal specificity
+   setting the capsule's width; the later one always won, so the bar "folded"
+   by hiding three tabs inside a capsule that never got narrower.
+
+   TRAP — #tabbar never moves. The capsule and the button each carry their own
+   backdrop-filter and their own transform, which is fine; a transform on
+   anything ABOVE them makes the glass sample an empty backdrop.
    ================================================================== */
 #tabbar {
   position: fixed; z-index: 70;
-  /* Centred with flexbox, NOT with translateX(-50%). The capsule inside carries
-     the backdrop-filter, and a transformed ANCESTOR makes it sample an empty
-     backdrop — the glass turns into flat paint with no error anywhere. This
-     bar is one declaration away from that, every time it is touched. */
   left: 0; right: 0; bottom: calc(var(--safe-b) + 14px);
-  display: flex; align-items: center; justify-content: center; gap: 10px;
+  height: var(--tabbar-h);
   pointer-events: none;
-  --row-x: 0px; --lens-x: 0px; --lens-w: 0px; --min-w: 0px;
+  --cap-x: 0px; --cap-w: 0px; --call-x: 0px; --call-s: 1;
+  --row-x: 0px; --lens-x: 0px; --lens-w: 0px;
 }
+/* nothing paints until the first measure has put it somewhere */
+#tabbar:not([data-ready]) { visibility: hidden; }
+#tabbar.instant, #tabbar.instant * { transition: none !important; }
 #tabbar > * { pointer-events: auto; }
 
 #tabs {
-  position: relative;
-  height: var(--tabbar-h);
+  position: absolute; left: 0; top: 0;
+  width: var(--cap-w); height: var(--tabbar-h);
   padding: 6px;
   border-radius: 999px;
   overflow: hidden;
@@ -363,35 +392,34 @@ section:first-child { margin-top: 0; }
     0 0 0 .5px var(--glass-line),
     inset 0 .5px 0 var(--glass-edge),
     0 8px 30px rgba(16, 20, 28, .16);
-  width: var(--bar-w, auto);
-  transition: width .52s var(--spring), border-radius .4s var(--spring);
+  transform: translate3d(var(--cap-x), 0, 0);
+  transition: transform .56s var(--spring), width .56s var(--spring);
+  /* sideways movement is ours (the lens); up and down still scroll the page */
+  touch-action: pan-y;
+  -webkit-tap-highlight-color: transparent;
 }
-#tabbar.min #tabs { width: calc(var(--min-w) + 12px); }
-#tabbar[data-ready="1"] #tabs { width: calc(var(--w, 0px) + 12px); }
 
 #tabs-row {
-  display: flex; align-items: stretch; height: 100%;
+  position: relative;
+  display: flex; align-items: stretch;
+  width: max-content; height: 100%;
   transform: translate3d(var(--row-x), 0, 0);
-  transition: transform .52s var(--spring);
+  transition: transform .56s var(--spring);
 }
 
+/* inside the row, so a tab's position and the lens's are one coordinate space */
 #tabs-lens {
-  position: absolute; top: 6px; left: 0; height: calc(100% - 12px);
-  width: var(--lens-w); border-radius: 999px;
+  position: absolute; top: 0; left: 0; z-index: 0;
+  width: var(--lens-w); height: 100%;
+  border-radius: 999px;
   transform: translate3d(var(--lens-x), 0, 0);
   background: var(--lens);
-  box-shadow: 0 1px 3px rgba(16, 20, 28, .13), inset 0 .5px 0 rgba(255, 255, 255, .8);
+  box-shadow: var(--lens-shadow);
   transition: transform .52s var(--spring-lens), width .52s var(--spring), opacity .25s var(--ease);
   pointer-events: none;
 }
 #tabbar.no-lens #tabs-lens { opacity: 0; }
 #tabbar.dragging #tabs-lens { transition: transform .09s linear, width .09s linear; }
-#tabbar.dragging #tabs-row { transition: none; }
-:root[data-theme="dark"] #tabs-lens,
-:root:not([data-theme="light"]) #tabs-lens { box-shadow: inset 0 0 0 .5px rgba(255, 255, 255, .16); }
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) #tabs-lens { box-shadow: 0 1px 3px rgba(16, 20, 28, .13), inset 0 .5px 0 rgba(255, 255, 255, .8); }
-}
 
 /* the sunrise, under the lens — the brand as light rather than paint */
 #tabs-lens::after {
@@ -404,16 +432,21 @@ section:first-child { margin-top: 0; }
 
 .tab {
   position: relative; z-index: 1;
+  flex: none;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 2px;
   min-width: 70px; padding-inline: 10px;
+  border-radius: 999px;
   color: var(--ink-3);
   font-size: 10.5px; font-weight: 500; letter-spacing: .01em;
   transition: color .26s var(--ease), opacity .34s var(--spring);
+  -webkit-tap-highlight-color: transparent;
 }
-.tab:hover { color: var(--tint); }
 .tab[aria-current="page"] { color: var(--ink); }
+/* the capsule clips, so the focus ring is drawn inside the tab */
+.tab:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--amber); }
 #tabbar.min .tab:not([aria-current="page"]) { opacity: 0; pointer-events: none; }
+.tab-label { white-space: nowrap; }
 
 .tab-ico { position: relative; width: 25px; height: 25px; }
 .tab-ico .ico { position: absolute; inset: 0; width: 25px; height: 25px; transition: opacity .24s var(--ease), transform .38s var(--spring-lens); }
@@ -421,23 +454,26 @@ section:first-child { margin-top: 0; }
 .tab[aria-current="page"] .tab-ico .ico:nth-child(1) { opacity: 0; transform: scale(1.1); }
 .tab[aria-current="page"] .tab-ico .ico:nth-child(2) { opacity: 1; transform: none; }
 .tab.under { color: var(--ink); }
-:root { --tab-ink-on: var(--glass); }
 
+/* how many treatments are waiting in the basket, on the Book tab */
 .tab-badge {
-  position: absolute; top: -3px; right: -7px;
+  position: absolute; top: -4px; right: -9px; z-index: 2;
   min-width: 17px; height: 17px; padding-inline: 4px;
   display: none; place-items: center;
   border-radius: 9px;
-  background: var(--amber); color: #241300;
-  font-size: 10.5px; font-weight: 700; letter-spacing: 0;
-  box-shadow: 0 0 0 2px var(--glass);
+  background: var(--sunrise); color: #241300;
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0; line-height: 1;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 0 2px var(--card);
 }
 .tab-badge.on { display: grid; animation: pop .42s var(--spring-lens); }
+.tab-badge.on.bump { animation: pop .42s var(--spring-lens); }
 @keyframes pop { from { transform: scale(.4); } to { transform: scale(1); } }
 
 /* the standing action, beside the places */
 #call-btn {
-  width: var(--tabbar-h); height: var(--tabbar-h); flex: none;
+  position: absolute; left: 0; top: 0;
+  width: var(--tabbar-h); height: var(--tabbar-h);
   display: grid; place-items: center;
   border-radius: 50%;
   background: var(--glass);
@@ -448,19 +484,21 @@ section:first-child { margin-top: 0; }
     0 0 0 .5px var(--glass-line),
     inset 0 .5px 0 var(--glass-edge),
     0 8px 30px rgba(16, 20, 28, .16);
-  transition: transform .3s var(--spring-lens), color .24s var(--ease);
+  /* one transform carries both where it is and how far it is pressed */
+  transform: translate3d(var(--call-x), 0, 0) scale(var(--call-s));
+  transition: transform .56s var(--spring), color .24s var(--ease);
+  -webkit-tap-highlight-color: transparent;
 }
-#call-btn:hover { color: var(--tint); transform: scale(1.06); }
-#call-btn:active { transform: scale(.92); }
+#call-btn:active { --call-s: .92; transition-duration: .14s, .24s; }
+#call-btn:focus-visible { outline-offset: 3px; border-radius: 50%; }
 #call-btn .ico { width: 23px; height: 23px; }
 
-/* At iPhone-mini width the four tabs plus the call button would run off the
-   screen, so the tabs give up a little and the button shrinks with them. */
+/* At iPhone-mini width the tabs give up a little room; below 340px the call
+   button goes, and the number stays one tap away on Home. */
 @media (max-width: 400px) {
   :root { --tabbar-h: 58px; }
   .tab { min-width: 62px; padding-inline: 6px; font-size: 10px; }
   .tab-ico, .tab-ico .ico { width: 23px; height: 23px; }
-  #tabbar { gap: 8px; }
 }
 @media (max-width: 340px) {
   .tab { min-width: 56px; }
@@ -483,7 +521,6 @@ section:first-child { margin-top: 0; }
   position: relative;
   transition: box-shadow .34s var(--ease), transform .34s var(--spring);
 }
-.card-glow:hover { box-shadow: var(--shadow-2); transform: translateY(-2px); }
 
 .list {
   background: var(--card);
@@ -502,7 +539,6 @@ section:first-child { margin-top: 0; }
   content: ""; position: absolute; inset: 0 0 auto 16px; height: .5px;
   background: var(--line);
 }
-button.row:hover, a.row:hover { background: var(--tint-soft); }
 button.row:active, a.row:active { background: var(--fill-2); }
 .row-ico {
   width: 34px; height: 34px; flex: none;
@@ -511,7 +547,9 @@ button.row:active, a.row:active { background: var(--fill-2); }
   background: var(--fill); color: var(--ink-2);
   transition: background .22s var(--ease), color .22s var(--ease);
 }
-.row:hover .row-ico { background: var(--sunrise); color: #2A1700; }
+/* a photo in an icon box fills it — its width/height attributes are the
+   file's pixels, not the size to draw, and it rendered 34 × 312 */
+.row-ico > img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
 .row-body { flex: 1 1 auto; min-width: 0; }
 .row-title { display: block; font-size: 15.5px; font-weight: 500; letter-spacing: -.012em; }
 .row-sub { display: block; font-size: 13px; color: var(--ink-3); margin-top: 2px; line-height: 1.4; }
@@ -548,21 +586,21 @@ button.row:active, a.row:active { background: var(--fill-2); }
   transition: opacity .3s var(--ease);
 }
 .btn-primary > * { position: relative; z-index: 1; }
-.btn-primary:hover { box-shadow: var(--shadow-lift); color: #2A1700; }
-.btn-primary:hover::before { opacity: 1; }
 .btn-primary:active::before { opacity: 1; }
 
 .btn-tint { background: var(--tint-soft); color: var(--tint); }
-.btn-tint:hover { background: var(--sunrise); color: #2A1700; }
 .btn-ghost { background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
-.btn-ghost:hover { background: var(--tint-soft); box-shadow: inset 0 0 0 1px var(--tint-line); color: var(--tint); }
 .btn-quiet { background: transparent; color: var(--ink-2); min-height: 42px; }
-.btn-quiet:hover { color: var(--tint); background: var(--tint-soft); }
 .btn-danger { background: transparent; color: var(--bad); box-shadow: inset 0 0 0 1px var(--line); }
-.btn-danger:hover { background: rgba(194, 43, 43, .1); box-shadow: inset 0 0 0 1px rgba(194, 43, 43, .34); }
 
 /* chips — the filter row on Services, and the health answers */
-.chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 2px 0 4px; }
+/* a scrolling strip runs to the edge of the screen, like the rails, instead
+   of stopping hard at the content margin and slicing its last chip in half */
+.chips {
+  display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none;
+  margin-inline: calc(var(--gut) * -1); padding: 2px var(--gut) 4px;
+  scroll-padding-inline: var(--gut);
+}
 .chips::-webkit-scrollbar { display: none; }
 .chips.wrap-chips { flex-wrap: wrap; overflow: visible; }
 .chip {
@@ -578,7 +616,6 @@ button.row:active, a.row:active { background: var(--fill-2); }
   transition: color .2s var(--ease), box-shadow .24s var(--ease), background .24s var(--ease), transform .2s var(--spring);
 }
 .chip .ico { width: 17px; height: 17px; }
-.chip:hover { color: var(--tint); box-shadow: inset 0 0 0 1px var(--tint-line); }
 .chip:active { transform: scale(.96); }
 .chip[aria-pressed="true"], .chip.on {
   color: var(--ink); background: var(--tint-soft);
@@ -608,7 +645,6 @@ button.row:active, a.row:active { background: var(--fill-2); }
   transition: color .2s var(--ease);
 }
 .seg button[aria-selected="true"] { color: var(--ink); }
-.seg button:hover { color: var(--tint); }
 
 /* switch */
 .switch {
@@ -649,7 +685,6 @@ button.row:active, a.row:active { background: var(--fill-2); }
   border-radius: 50%; color: var(--ink-2);
   transition: background .18s var(--ease), color .18s var(--ease);
 }
-.stepper button:hover { background: var(--card); color: var(--tint); }
 .stepper button[disabled] { opacity: .35; pointer-events: none; }
 .stepper .n { min-width: 22px; text-align: center; font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .stepper .ico { width: 16px; height: 16px; stroke-width: 2.2; }
@@ -742,7 +777,6 @@ button.row:active, a.row:active { background: var(--fill-2); }
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .26);
   color: #fff;
 }
-.hero .btn-glass:hover { background: rgba(255, 255, 255, .27); }
 
 .hero-door {
   display: inline-flex; align-items: center; gap: 7px;
@@ -779,10 +813,8 @@ button.row:active, a.row:active { background: var(--fill-2); }
   overflow: hidden;
   transition: transform .38s var(--spring), box-shadow .38s var(--ease);
 }
-.tile:hover { transform: translateY(-3px); box-shadow: var(--shadow-2); }
 .tile-media { position: relative; aspect-ratio: 4 / 3; overflow: hidden; background: var(--fill); }
 .tile-media img { width: 100%; height: 100%; object-fit: cover; transition: transform .7s var(--ease), filter .5s var(--ease); }
-.tile:hover .tile-media img { transform: scale(1.06); }
 /* the sunrise wipes across the picture on hover — the brand as an effect */
 .tile-media::after {
   content: ""; position: absolute; inset: 0;
@@ -791,7 +823,6 @@ button.row:active, a.row:active { background: var(--fill-2); }
   opacity: 0;
   transition: transform .8s var(--ease), opacity .3s var(--ease);
 }
-.tile:hover .tile-media::after { transform: translateX(100%); opacity: 1; }
 .tile-body { padding: 12px 14px 14px; }
 .tile-name { font-size: 14.5px; font-weight: 500; letter-spacing: -.012em; line-height: 1.28; }
 .tile-meta { display: flex; align-items: baseline; gap: 8px; margin-top: 6px; font-size: 13px; color: var(--ink-3); }
@@ -802,16 +833,13 @@ button.row:active, a.row:active { background: var(--fill-2); }
 @media (min-width: 640px) { .grid-2 { grid-template-columns: repeat(3, 1fr); } }
 
 .gtile { position: relative; display: block; border-radius: var(--r); overflow: hidden; background: var(--card); box-shadow: var(--shadow-1); transition: transform .34s var(--spring), box-shadow .34s var(--ease); }
-.gtile:hover { transform: translateY(-2px); box-shadow: var(--shadow-2); }
 .gtile-media { aspect-ratio: 5 / 4; overflow: hidden; background: var(--fill); }
 .gtile-media img { width: 100%; height: 100%; object-fit: cover; transition: transform .7s var(--ease); }
-.gtile:hover .gtile-media img { transform: scale(1.07); }
 .gtile-cap { position: absolute; inset: auto 0 0 0; padding: 26px 12px 11px; color: #fff;
   background: linear-gradient(180deg, transparent, rgba(8, 10, 14, .78)); }
 .gtile-cap b { display: block; font-size: 14.5px; font-weight: 500; letter-spacing: -.01em; }
 .gtile-cap small { font-size: 11.5px; opacity: .78; }
 .gtile-ray { position: absolute; inset: auto 0 0 0; height: 3px; background: var(--sunrise); transform: scaleX(0); transform-origin: left; transition: transform .5s var(--spring); }
-.gtile:hover .gtile-ray { transform: scaleX(1); }
 
 /* quick actions */
 .quick { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; }
@@ -824,14 +852,19 @@ button.row:active, a.row:active { background: var(--fill-2); }
   font-size: 12px; font-weight: 500; color: var(--ink-2);
   transition: transform .26s var(--spring), color .22s var(--ease), box-shadow .3s var(--ease);
 }
-.quick a:hover, .quick button:hover { color: var(--tint); transform: translateY(-2px); box-shadow: var(--shadow-2); }
 .quick a:active, .quick button:active { transform: scale(.96); }
 .quick .qi {
   width: 40px; height: 40px; display: grid; place-items: center;
   border-radius: 13px; background: var(--fill); color: var(--ink);
   transition: background .28s var(--ease), color .28s var(--ease), transform .4s var(--spring-lens);
 }
-.quick a:hover .qi, .quick button:hover .qi { background: var(--sunrise); color: #2A1700; transform: rotate(-6deg) scale(1.06); }
+
+.quick .ql { display: block; line-height: 1.2; text-align: center; text-wrap: balance; }
+/* French labels run longer ("Carte-cadeau" wraps). Every label gets the same
+   two-line box, so one wrapped label does not leave three looking misplaced. */
+:root[data-lang="fr"] .quick .ql {
+  display: flex; align-items: center; justify-content: center; min-height: 2.4em;
+}
 
 /* ====================================================== the club card */
 .club {
@@ -885,7 +918,10 @@ button.row:active, a.row:active { background: var(--fill-2); }
 .ring-mid small { font-size: 10.5px; color: var(--ink-3); letter-spacing: .06em; text-transform: uppercase; }
 
 /* ======================================================== the booking */
-.steps { display: flex; align-items: center; gap: 6px; padding: 0 var(--gut) 4px; }
+.steps {
+  display: flex; align-items: center; gap: 6px;
+  width: min(100%, 720px); margin-inline: auto; padding: 0 var(--gut) 4px;
+}
 .step-dot {
   flex: 1 1 0; height: 3px; border-radius: 2px;
   background: var(--fill-2);
@@ -895,7 +931,7 @@ button.row:active, a.row:active { background: var(--fill-2); }
 .step-dot.done i, .step-dot.on i { width: 100%; }
 .step-dot.on i { background: var(--sunrise); }
 
-.step-head { padding: 4px var(--gut) 0; }
+.step-head { width: min(100%, 720px); margin-inline: auto; padding: 4px var(--gut) 0; }
 .step-kicker { font-family: var(--display); font-size: 11.5px; font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: var(--tint); }
 .step-title { font-family: var(--display); font-size: clamp(25px, 7vw, 31px); font-weight: 300; letter-spacing: -.014em; margin-top: 7px; }
 .step-sub { font-size: 14.5px; color: var(--ink-2); margin-top: 9px; line-height: 1.55; }
@@ -925,6 +961,7 @@ button.row:active, a.row:active { background: var(--fill-2); }
 
 /* calendar strip */
 .cal {
+  position: relative;
   display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none;
   margin-inline: calc(var(--gut) * -1); padding: 4px var(--gut) 8px;
   scroll-snap-type: x proximity;
@@ -944,7 +981,6 @@ button.row:active, a.row:active { background: var(--fill-2); }
 .cal-day i { display: block; width: 5px; height: 5px; border-radius: 50%; margin: 6px auto 0; background: var(--ok); }
 .cal-day.tight i { background: var(--warn); }
 .cal-day.full i, .cal-day.closed i { background: var(--ink-3); opacity: .5; }
-.cal-day:hover { box-shadow: inset 0 0 0 1.5px var(--tint-line); transform: translateY(-2px); }
 .cal-day[aria-pressed="true"] {
   background: var(--sunrise); color: #2A1700;
   box-shadow: var(--shadow-lift);
@@ -965,9 +1001,12 @@ button.row:active, a.row:active { background: var(--fill-2); }
   letter-spacing: -.01em;
   transition: transform .24s var(--spring), box-shadow .24s var(--ease), background .24s var(--ease), color .24s var(--ease);
 }
-.slot:hover { box-shadow: inset 0 0 0 1.5px var(--tint-line); color: var(--tint); transform: translateY(-1px); }
 .slot[aria-pressed="true"] { background: var(--sunrise); color: #2A1700; box-shadow: var(--shadow-lift); }
 .slot[disabled] { opacity: .3; pointer-events: none; text-decoration: line-through; }
+.slot.current {
+  opacity: 1; text-decoration: none; color: var(--tint);
+  background: var(--tint-soft); box-shadow: inset 0 0 0 1.5px var(--tint-line);
+}
 .slot-group { margin-top: 18px; }
 .slot-group h3 { font-size: 12.5px; font-weight: 500; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 9px; }
 
@@ -982,7 +1021,6 @@ button.row:active, a.row:active { background: var(--fill-2); }
   transition: box-shadow .24s var(--ease), background .24s var(--ease), transform .24s var(--spring);
 }
 .person + .person { margin-top: 9px; }
-.person:hover { box-shadow: inset 0 0 0 1.5px var(--tint-line); transform: translateY(-1px); }
 .person[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--amber); background: var(--tint-soft); }
 .person[disabled] { opacity: .45; pointer-events: none; }
 .avatar {
@@ -1044,6 +1082,7 @@ button.row:active, a.row:active { background: var(--fill-2); }
 /* ============================================================= sheet */
 #scrim {
   position: fixed; inset: 0; z-index: 80;
+  touch-action: none;
   background: rgba(10, 12, 16, .42);
   -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
   opacity: 0; pointer-events: none;
@@ -1069,7 +1108,8 @@ button.row:active, a.row:active { background: var(--fill-2); }
 .sheet-grab { width: 38px; height: 5px; border-radius: 3px; background: var(--fill-2); margin: 9px auto 2px; flex: none; }
 .sheet-head { display: flex; align-items: center; gap: 10px; padding: 8px 16px 10px; flex: none; }
 .sheet-head h2 { flex: 1 1 auto; font-size: 17px; font-weight: 600; letter-spacing: -.015em; }
-.sheet-body { overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 0 16px 18px; }
+.sheet-body { overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; padding: 0 16px 18px; }
+html.sheet-open, html.sheet-open body { overflow: hidden; }
 .sheet-foot { flex: none; padding: 12px 16px calc(12px + var(--safe-b)); border-top: .5px solid var(--line); display: flex; gap: 10px; }
 @media (min-width: 700px) {
   .sheet { bottom: auto; top: 50%; border-radius: var(--r-xl); transform: translate(-50%, -46%) scale(.96); opacity: 0; }
@@ -1078,14 +1118,15 @@ button.row:active, a.row:active { background: var(--fill-2); }
 }
 
 /* ============================================================= toast */
+/* At the top, under the bar. The foot of the screen belongs to the booking
+   dock and the tab bar, and a toast down there covered the Continue button. */
 #toast {
   position: fixed; z-index: 90;
-  left: 0; right: 0; bottom: calc(var(--dock) + 16px);
+  left: 0; right: 0; top: calc(var(--safe-t) + var(--topbar-h) + 8px);
   margin-inline: auto;
-  transform: translateY(18px);
   width: fit-content; max-width: min(92vw, 420px);
   display: flex; align-items: center; gap: 10px;
-  padding: 12px 17px;
+  padding: 11px 17px;
   border-radius: 999px;
   background: var(--glass);
   -webkit-backdrop-filter: var(--glass-filter);
@@ -1093,9 +1134,10 @@ button.row:active, a.row:active { background: var(--fill-2); }
   box-shadow: 0 0 0 .5px var(--glass-line), 0 10px 34px rgba(16, 20, 28, .22);
   font-size: 14.5px; font-weight: 500;
   opacity: 0; pointer-events: none;
+  transform: translateY(-14px) scale(.97);
   transition: opacity .3s var(--ease), transform .44s var(--spring);
 }
-#toast.on { opacity: 1; transform: translateY(0); }
+#toast.on { opacity: 1; transform: none; }
 #toast .ico { width: 19px; height: 19px; color: var(--tint); }
 
 /* ============================================================ detail */
@@ -1142,7 +1184,6 @@ button.row:active, a.row:active { background: var(--fill-2); }
 }
 .foot-logo { width: 72px; margin: 0 auto 14px; opacity: .9; }
 .foot-lines { font-size: 13px; color: var(--ink-3); line-height: 1.8; }
-.foot-lines a:hover { color: var(--tint); }
 .foot-alpha {
   display: inline-flex; align-items: center; gap: 8px;
   margin-top: 22px; padding: 9px 16px;
@@ -1151,13 +1192,11 @@ button.row:active, a.row:active { background: var(--fill-2); }
   font-size: 12px; color: var(--ink-3);
   transition: background .26s var(--ease), color .26s var(--ease);
 }
-.foot-alpha:hover { background: var(--tint-soft); color: var(--tint); }
 .foot-alpha b {
   font-family: var(--display); font-weight: 500;
   letter-spacing: .2em; text-transform: uppercase; color: var(--ink);
   transition: color .26s var(--ease);
 }
-.foot-alpha:hover b { color: var(--tint); }
 .foot-note { margin-top: 14px; font-size: 11.5px; color: var(--ink-3); opacity: .8; }
 
 /* ============================================================== boot */
@@ -1197,3 +1236,58 @@ html.booting, html.booting body { overflow: hidden; }
 
 /* while the theme is switching, stop every colour from easing at its own pace */
 html.theming, html.theming * { transition: none !important; }
+
+/* The ends of a scrolling strip fade, so where it stops reads as "more this way"
+   rather than as a day cut in half at the edge of the column. Neither strip ever
+   holds glass, which a mask would stop from blurring. */
+.chips, .cal {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 var(--gut), #000 calc(100% - var(--gut)), transparent);
+          mask-image: linear-gradient(90deg, transparent, #000 var(--gut), #000 calc(100% - var(--gut)), transparent);
+}
+
+/* ============================================================ touch
+   Hover only where there is a pointer that can hover. On a phone a tapped
+   element keeps :hover until the next tap somewhere else — and when the tap
+   itself changes the layout, the stuck highlight lands on a DIFFERENT row
+   than the one tapped, which reads as the wrong treatment being chosen.
+   Touch gets :active instead; js/app.js listens for touchstart, without
+   which iOS never applies :active at all.
+   ================================================================== */
+.tile:active, .gtile:active, .card-glow:active { transform: scale(.985); }
+.slot:active, .cal-day:active, .person:active { transform: scale(.97); }
+.quick a:active .qi { background: var(--sunrise); color: #2A1700; }
+
+@media (hover: hover) and (pointer: fine) {
+  .sec-head .more:hover { text-decoration: underline; }
+  #topbar[data-tone="dark"] .tb-btn:hover { background: rgba(255, 255, 255, .28); }
+  .tb-btn:hover { background: var(--tint-soft); color: var(--tint); }
+  .tab:hover { color: var(--tint); }
+  #call-btn:hover { color: var(--tint); --call-s: 1.06; }
+  .card-glow:hover { box-shadow: var(--shadow-2); transform: translateY(-2px); }
+  button.row:hover, a.row:hover { background: var(--tint-soft); }
+  .row:hover .row-ico { background: var(--sunrise); color: #2A1700; }
+  .btn-primary:hover { box-shadow: var(--shadow-lift); color: #2A1700; }
+  .btn-primary:hover::before { opacity: 1; }
+  .btn-tint:hover { background: var(--sunrise); color: #2A1700; }
+  .btn-ghost:hover { background: var(--tint-soft); box-shadow: inset 0 0 0 1px var(--tint-line); color: var(--tint); }
+  .btn-quiet:hover { color: var(--tint); background: var(--tint-soft); }
+  .btn-danger:hover { background: rgba(194, 43, 43, .1); box-shadow: inset 0 0 0 1px rgba(194, 43, 43, .34); }
+  .chip:hover { color: var(--tint); box-shadow: inset 0 0 0 1px var(--tint-line); }
+  .seg button:hover { color: var(--tint); }
+  .stepper button:hover { background: var(--card); color: var(--tint); }
+  .hero .btn-glass:hover { background: rgba(255, 255, 255, .27); }
+  .tile:hover { transform: translateY(-3px); box-shadow: var(--shadow-2); }
+  .tile:hover .tile-media img { transform: scale(1.06); }
+  .tile:hover .tile-media::after { transform: translateX(100%); opacity: 1; }
+  .gtile:hover { transform: translateY(-2px); box-shadow: var(--shadow-2); }
+  .gtile:hover .gtile-media img { transform: scale(1.07); }
+  .gtile:hover .gtile-ray { transform: scaleX(1); }
+  .quick a:hover, .quick button:hover { color: var(--tint); transform: translateY(-2px); box-shadow: var(--shadow-2); }
+  .quick a:hover .qi, .quick button:hover .qi { background: var(--sunrise); color: #2A1700; transform: rotate(-6deg) scale(1.06); }
+  .cal-day:hover { box-shadow: inset 0 0 0 1.5px var(--tint-line); transform: translateY(-2px); }
+  .slot:hover { box-shadow: inset 0 0 0 1.5px var(--tint-line); color: var(--tint); transform: translateY(-1px); }
+  .person:hover { box-shadow: inset 0 0 0 1.5px var(--tint-line); transform: translateY(-1px); }
+  .foot-lines a:hover { color: var(--tint); }
+  .foot-alpha:hover { background: var(--tint-soft); color: var(--tint); }
+  .foot-alpha:hover b { color: var(--tint); }
+}

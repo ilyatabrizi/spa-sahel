@@ -26,6 +26,14 @@ fails loudly on anything broken. What it is actually guarding:
   the honesty    nothing invented: consultation prices say so, our own duration
                  estimates are marked, the club is labelled as Alpha's proposal
   light + dark   and a contrast walk over both
+  the nav, as it  the folded capsule really hugs its tab at the leading edge with
+  looks          the call button at the trailing one; the lens sits on its tab to
+                 the pixel and never flies in on a deep link; the top bar never
+                 shows glass and white controls together over a photograph; the
+                 bar title is centred on the screen
+  touch          no hover without a hover-capable pointer, a tapped row stays
+                 under the finger, the toast never lands on the dock or a bar
+  moving a visit reschedule carries the appointment into the diary and moves it
 
 Screenshots land in scripts/shots/.
 """
@@ -121,6 +129,39 @@ CONTRAST_JS = """(sel) => {
     if (got < need) bad.push({ t: txt.slice(0, 42), got: +got.toFixed(2), need, size, color: cs.color });
   }
   return bad;
+}"""
+
+# Where the capsule, the call button, the current tab and the lens actually are.
+GEO_JS = """() => {
+  const cap = document.getElementById('tabs').getBoundingClientRect();
+  const call = document.getElementById('call-btn').getBoundingClientRect();
+  const tabs = [...document.querySelectorAll('.tab')];
+  const cur = document.querySelector('.tab[aria-current=page]');
+  const lens = document.getElementById('tabs-lens').getBoundingClientRect();
+  const c = cur ? cur.getBoundingClientRect() : null;
+  return { min: document.getElementById('tabbar').classList.contains('min'), vw: innerWidth,
+    capL: cap.left, capR: cap.right, capW: cap.width, callL: call.left, callR: call.right,
+    sumTabs: tabs.reduce((s, t) => s + t.getBoundingClientRect().width, 0),
+    curL: c && c.left, curW: c && c.width, lensL: lens.left, lensW: lens.width };
+}"""
+
+# Every rendered element carrying a backdrop-filter, and the first ancestor that
+# would stop it sampling the page: a transform, a filter, or opacity below one.
+ALL_GLASS_JS = """() => {
+  const out = [];
+  for (const el of document.querySelectorAll('*')) {
+    const cs = getComputedStyle(el);
+    const bf = cs.backdropFilter || cs.webkitBackdropFilter;
+    if (!bf || bf === 'none' || !el.getClientRects().length) continue;
+    for (let n = el.parentElement; n; n = n.parentElement) {
+      const s = getComputedStyle(n);
+      if (s.transform !== 'none' || s.filter !== 'none' || parseFloat(s.opacity) < 1) {
+        out.push((el.id || el.className) + ' <- ' + (n.id || n.className || n.tagName) + ' ' + s.transform + ' op' + s.opacity);
+        break;
+      }
+    }
+  }
+  return out;
 }"""
 
 
@@ -708,6 +749,253 @@ def main():
         check("reduced motion still shows the revealed sections", rpage.evaluate(
             "() => [...document.querySelectorAll('.reveal')].every(e => getComputedStyle(e).opacity === '1')"))
         rm.close()
+
+
+        # ========================================================= the nav
+        # Every check below was a bug a client could see. The fold hid three
+        # tabs inside a capsule that never narrowed; the lens sat six pixels off
+        # its tab; the bar painted white type on white glass over the hero; hover
+        # stuck on touch and, after the tap reflowed the list, sat on a row that
+        # had not been tapped; reschedule bounced to an empty step one.
+        nav = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=2,
+                                  is_mobile=True, has_touch=True, user_agent=IPHONE)
+        npg = nav.new_page()
+        nav_errors: list[str] = []
+        npg.on("pageerror", lambda e: nav_errors.append(str(e)))
+
+        def cold(route, wait=".screen"):
+            npg.goto("about:blank")
+            npg.goto(BASE + route, wait_until="domcontentloaded")
+            npg.wait_for_selector(wait, timeout=20000)
+            npg.wait_for_timeout(1300)
+
+        def to(y):
+            npg.evaluate(f"() => window.scrollTo({{ top: {y}, behavior: 'instant' }})")
+            npg.wait_for_timeout(650)
+
+        def fold():
+            to(0)
+            npg.mouse.wheel(0, 500)
+            npg.wait_for_timeout(250)
+            npg.mouse.wheel(0, 1300)
+            npg.wait_for_timeout(900)
+
+        for route, tab in (("#/", "home"), ("#/services", "services"), ("#/book", "book"), ("#/you", "you")):
+            cold(route)
+            g = npg.evaluate(GEO_JS)
+            check(f"[{tab}] the open capsule is its tabs plus padding", abs(g["capW"] - (g["sumTabs"] + 12)) <= 1.5, g)
+            check(f"[{tab}] capsule and call button centred together",
+                  abs((g["capL"] + g["callR"]) / 2 - g["vw"] / 2) <= 2, g)
+            check(f"[{tab}] the lens sits exactly on its tab",
+                  abs(g["lensL"] - g["curL"]) <= 1 and abs(g["lensW"] - g["curW"]) <= 1, g)
+
+        npg.goto("about:blank")
+        npg.goto(BASE + "#/you", wait_until="domcontentloaded")
+        npg.wait_for_function("() => document.getElementById('tabbar')?.dataset.ready === '1'"
+                              " && document.querySelector('.tab[data-tab=you]').getAttribute('aria-current') === 'page'",
+                              timeout=20000)
+        drift = []
+        for _ in range(15):
+            drift.append(npg.evaluate("() => Math.round(document.getElementById('tabs-lens').getBoundingClientRect().left"
+                                      " - document.querySelector('.tab[data-tab=you]').getBoundingClientRect().left)"))
+            npg.wait_for_timeout(40)
+        check("a deep link places the lens, it does not fly in", max(abs(x) for x in drift) <= 1, drift)
+
+        for route, label in (("#/", "home"), ("#/services", "services")):
+            cold(route)
+            fold()
+            g = npg.evaluate(GEO_JS)
+            check(f"[{label}] the bar folds", g["min"], g)
+            check(f"[{label}] the folded capsule hugs its one tab", abs(g["capW"] - (g["curW"] + 12)) <= 1.5, g)
+            check(f"[{label}] and sits at the leading edge", abs(g["capL"] - 16) <= 1.5, g["capL"])
+            check(f"[{label}] with the call button at the trailing edge", abs(g["callR"] - (g["vw"] - 16)) <= 1.5, g["callR"])
+            check(f"[{label}] the folded lens stays on the tab", abs(g["lensL"] - g["curL"]) <= 1, g)
+            if label == "home":
+                npg.screenshot(path=str(SHOTS / "17-folded-bar.png"))
+            npg.mouse.wheel(0, -600)
+            npg.wait_for_timeout(900)
+            g = npg.evaluate(GEO_JS)
+            check(f"[{label}] it opens back to full width, centred",
+                  not g["min"] and abs(g["capW"] - (g["sumTabs"] + 12)) <= 1.5
+                  and abs((g["capL"] + g["callR"]) / 2 - g["vw"] / 2) <= 2, g)
+
+        cold("#/")
+        clash = []
+        for y in range(0, 1101, 50):
+            to(y)
+            st = npg.evaluate("() => { const t = document.getElementById('topbar');"
+                              " return { y: scrollY, lifted: t.dataset.lifted, tone: t.dataset.tone,"
+                              " title: +getComputedStyle(document.getElementById('tb-title')).opacity }; }")
+            if (st["lifted"] == "1" and st["tone"] == "dark") or (st["tone"] == "dark" and st["title"] > .05):
+                clash.append(st)
+        check("over the hero the bar is never glass and white at once", not clash, clash[:3])
+        to(900)
+        check("past the hero the bar is glass, dark and titled", npg.evaluate(
+            "() => { const t = document.getElementById('topbar');"
+            " return t.dataset.lifted === '1' && t.dataset.tone === 'light' && t.dataset.titled === '1'; }"))
+
+        cold("#/services")
+        to(6)
+        check("a plain page takes material as soon as content passes under",
+              npg.evaluate("() => document.getElementById('topbar').dataset.lifted") == "1")
+        check("the compact title waits for the page title",
+              npg.evaluate("() => document.getElementById('topbar').dataset.titled") == "0")
+        to(140)
+        check("then arrives", npg.evaluate("() => document.getElementById('topbar').dataset.titled") == "1")
+        off = npg.evaluate("() => { const r = document.getElementById('tb-title').getBoundingClientRect();"
+                           " return (r.left + r.right) / 2 - innerWidth / 2; }")
+        check("the bar title is centred on the screen", abs(off) <= 1, off)
+        check("the bar title is not a second heading", npg.evaluate("() => document.getElementById('tb-title').tagName") != "H1")
+
+        for route in ("#/", "#/book", "#/you"):
+            cold(route)
+            npg.evaluate("() => document.querySelectorAll('.reveal').forEach(e => e.classList.add('in'))")
+            npg.wait_for_timeout(900)
+            broken = npg.evaluate(ALL_GLASS_JS)
+            check(f"{route}: every glass element, chrome or page, really blurs", not broken, broken[:4])
+        check("a screen keeps no transform after its entry",
+              npg.evaluate("() => getComputedStyle(document.querySelector('.screen')).transform") == "none")
+
+        npg.evaluate("() => localStorage.removeItem('sahel.draft')")
+        cold("#/book")
+        check("a touch screen gets no hover", npg.evaluate("() => matchMedia('(hover: hover)').matches") is False)
+        edge = npg.evaluate("() => { const c = document.querySelector('.chips').getBoundingClientRect(); return [c.left, c.right, innerWidth]; }")
+        check("the chips strip runs edge to edge", abs(edge[0]) <= 1 and abs(edge[1] - edge[2]) <= 1, edge)
+        check("no badge on an empty basket",
+              not npg.evaluate("() => document.querySelector('.tab[data-tab=book] .tab-badge').classList.contains('on')"))
+        before = npg.locator('.row[data-id="f-micro"]').bounding_box()["y"]
+        npg.click('.row[data-id="f-micro"]')
+        npg.wait_for_timeout(500)
+        after = npg.locator('.row[data-id="f-micro"]').bounding_box()["y"]
+        check("a tapped row stays under the finger", abs(after - before) <= 2, f"{before:.1f} -> {after:.1f}")
+        box = npg.evaluate("() => { const i = document.querySelector('#chosen .row-ico img'); const r = i.getBoundingClientRect(),"
+                           " b = i.parentElement.getBoundingClientRect(); return [r.width, r.height, b.width, b.height]; }")
+        check("the visit thumbnail fills its box", abs(box[0] - box[2]) <= 1 and abs(box[1] - box[3]) <= 1, box)
+        check("the Book tab counts the basket", npg.evaluate(
+            "() => { const b = document.querySelector('.tab[data-tab=book] .tab-badge'); return b.classList.contains('on') && b.textContent === '1'; }"))
+        stuck = npg.evaluate("() => [...document.querySelectorAll('#g-list .row')].map(r => getComputedStyle(r).backgroundColor)"
+                             ".filter(c => c.includes('253, 139, 1'))")
+        check("no hover wash is left behind by a tap", not stuck, stuck)
+        npg.evaluate("() => import('./js/ui.js').then(m => m.toast('Overlap probe'))")
+        npg.wait_for_timeout(600)
+        hits = npg.evaluate("() => { const t = document.getElementById('toast').getBoundingClientRect();"
+                            " const over = (s) => { const r = document.querySelector(s).getBoundingClientRect();"
+                            " return t.bottom > r.top && t.top < r.bottom && t.right > r.left && t.left < r.right; };"
+                            " return { dock: over('#bookdock'), tabs: over('#tabs'), topbar: over('#topbar') }; }")
+        check("a toast lands on neither the dock nor either bar", not any(hits.values()), hits)
+
+        cold("#/service/f-peel")
+        npg.click("[data-add]")
+        npg.wait_for_timeout(400)
+        first = npg.inner_text("#toast")
+        npg.click("[data-add]")
+        npg.wait_for_timeout(400)
+        second = npg.inner_text("#toast")
+        check("Add says it was added", "Added" in first, first)
+        check("tapping Added takes it out again, and says so", "Removed" in second and npg.evaluate(
+            "() => !JSON.parse(localStorage.getItem('sahel.draft')).items.some(i => i.id === 'f-peel')"), second)
+
+        npg.evaluate("""() => {
+          localStorage.removeItem('sahel.draft');
+          const d = new Date(); d.setDate(d.getDate() + 6); d.setHours(11, 0, 0, 0);
+          if (d.getDay() === 0) d.setDate(d.getDate() + 1);
+          localStorage.setItem('sahel.member', JSON.stringify({ v: 1, name: 'Test Guest', phone: '5145551234',
+            email: 't@example.com', joined: Date.now(), points: 100, lifetime: 100, wallet: [], prefs: {},
+            health: null, referral: 'TEST123', bookings: [
+              { id: 'mv', ref: 'SAH-MOVE', when: d.getTime(), items: [{ id: 'f-phyto' }], therapist: 'any',
+                total: 85, minutes: 75, points: 85, status: 'confirmed', made: 0 },
+              { id: 'soon', ref: 'SAH-SOON', when: Date.now() + 3 * 3600000, items: [{ id: 'f-micro' }], therapist: 'any',
+                total: 60, minutes: 30, points: 60, status: 'confirmed', made: 0 }] })); }""")
+        cold("#/appointment/mv")
+        was = npg.evaluate("() => JSON.parse(localStorage.getItem('sahel.member')).bookings[0].when")
+        npg.click("[data-resched]")
+        npg.wait_for_timeout(1500)
+        check("reschedule opens the diary carrying the appointment",
+              "/book/when?r=mv" in npg.evaluate("() => location.hash"), npg.evaluate("() => location.hash"))
+        check("the diary names what is being moved", "SAH-MOVE" in npg.inner_text(".step-head"))
+        check("the time already held is marked as yours", npg.locator(".slot.current").count() == 1)
+        check("moving a visit is not a basket", not npg.evaluate(
+            "() => document.querySelector('.tab[data-tab=book] .tab-badge').classList.contains('on')"))
+        npg.screenshot(path=str(SHOTS / "18-reschedule.png"))
+        open_slots = npg.locator(".slot:not([disabled])")
+        if open_slots.count() == 0:
+            npg.locator(".cal-day:not([disabled])").nth(1).click()
+            npg.wait_for_timeout(700)
+            open_slots = npg.locator(".slot:not([disabled])")
+        open_slots.first.click()
+        npg.wait_for_timeout(400)
+        check("the dock offers to move it", "Move it here" in npg.inner_text("#bookdock"), npg.inner_text("#bookdock"))
+        npg.click("#bookdock button")
+        npg.wait_for_timeout(1300)
+        moved = npg.evaluate("() => JSON.parse(localStorage.getItem('sahel.member')).bookings[0]")
+        check("the appointment really moves", moved["when"] != was and moved["status"] == "confirmed", moved)
+        check("and you land back on it", npg.evaluate("() => location.hash") == "#/appointment/mv")
+        check("with nothing left half-done in the draft",
+              not json.loads(npg.evaluate("() => localStorage.getItem('sahel.draft') || '{}'")).get("reschedule"))
+        cold("#/appointment/soon")
+        npg.click("[data-resched]")
+        npg.wait_for_timeout(700)
+        check("inside the 24-hour window, moving it asks for a call",
+              npg.locator(".sheet.on").count() == 1 and "call" in npg.inner_text(".sheet").lower())
+        check("an open sheet holds the page still", npg.evaluate(
+            "() => document.documentElement.classList.contains('sheet-open')"
+            " && getComputedStyle(document.documentElement).overflow === 'hidden'"))
+        npg.keyboard.press("Escape")
+        npg.wait_for_timeout(500)
+        check("closing it lets go", not npg.evaluate("() => document.documentElement.classList.contains('sheet-open')"))
+
+        cold("#/")
+        npg.click("#lang-pill")
+        npg.wait_for_timeout(900)
+        heights = npg.evaluate("() => [...document.querySelectorAll('.quick .ql')].map(e => Math.round(e.getBoundingClientRect().height))")
+        check("French quick actions share one label height", len(set(heights)) == 1, heights)
+        npg.click("#lang-pill")
+        npg.wait_for_timeout(700)
+        npg.evaluate("() => localStorage.removeItem('sahel.draft')")
+        cold("#/book")
+        npg.click('.row[data-id="f-micro"]')
+        npg.wait_for_timeout(300)
+        npg.click("#bookdock button")
+        npg.wait_for_timeout(700)
+        npg.click('.person[data-t="any"]')
+        npg.wait_for_timeout(1300)
+        npg.locator(".slot:not([disabled])").first.click()
+        npg.wait_for_timeout(300)
+        npg.click("#bookdock button")
+        npg.wait_for_timeout(800)
+        check("the email placeholder is English in English",
+              npg.get_attribute("#f-email", "placeholder") == "name@example.com")
+        check("no page errors across the nav walk", not nav_errors, "; ".join(nav_errors[:3]))
+        nav.close()
+
+        dark = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=2, is_mobile=True,
+                                   has_touch=True, user_agent=IPHONE, color_scheme="dark")
+        npg = dark.new_page()
+        cold("#/services")
+        shadow = npg.evaluate("() => getComputedStyle(document.getElementById('tabs-lens')).boxShadow")
+        check("the dark lens takes the dark edge, not the light shadow", "inset" in shadow and "16, 20, 28" not in shadow, shadow)
+        fold()
+        g = npg.evaluate(GEO_JS)
+        check("dark: the folded capsule hugs its tab", abs(g["capW"] - (g["curW"] + 12)) <= 1.5, g)
+        npg.screenshot(path=str(SHOTS / "19-folded-dark.png"))
+        dark.close()
+
+        desk = browser.new_context(viewport={"width": 1280, "height": 900})
+        npg = desk.new_page()
+        cold("#/book")
+        npg.click('.row[data-id="f-micro"]')
+        npg.wait_for_timeout(300)
+        npg.click("#bookdock button")
+        npg.wait_for_timeout(700)
+        npg.click('.person[data-t="any"]')
+        npg.wait_for_timeout(1300)
+        cal = npg.evaluate("() => { const c = document.getElementById('cal'), s = c.querySelector('[aria-pressed=true]');"
+                           " const cr = c.getBoundingClientRect(), sr = s.getBoundingClientRect();"
+                           " const h = document.querySelector('.step-head').getBoundingClientRect(), w = document.querySelector('.wrap').getBoundingClientRect();"
+                           " return { visible: sr.left >= cr.left - 1 && sr.right <= cr.right + 1, head: h.left, wrap: w.left }; }")
+        check("desktop: the chosen day is in view", cal["visible"], cal)
+        check("desktop: the booking header sits in the content column", abs(cal["head"] - cal["wrap"]) <= 1, cal)
+        desk.close()
 
         noisy = [e for e in errors if "favicon" not in e.lower() and "sw.js" not in e.lower()]
         check("no console errors", not noisy, "; ".join(noisy[:3]))

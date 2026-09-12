@@ -26,6 +26,7 @@ const EMPTY = {
   health: null,         // {flags: [...], detail: "", consent: bool}
   rewardId: null,
   promo: null,
+  reschedule: null,     // an existing appointment being moved to a new time
   step: 1,
 };
 
@@ -52,7 +53,13 @@ export const count = () => draft.items.length;
 export const has = (id) => draft.items.some((i) => i.id === id);
 export const hasPackage = (id) => draft.items.some((i) => i.pkg === id);
 
+/** A new choice always starts a new booking — it never edits an appointment being moved. */
+function leaveReschedule() {
+  if (draft.reschedule) draft = { ...EMPTY, items: [] };
+}
+
 export function add(id) {
+  leaveReschedule();
   if (has(id) || draft.items.length >= BOOKING.maxServices) return false;
   draft.items.push({ id });
   dropSlot();
@@ -60,6 +67,7 @@ export function add(id) {
   return true;
 }
 export function addPackage(pkgId, option = null) {
+  leaveReschedule();
   if (hasPackage(pkgId) || draft.items.length >= BOOKING.maxServices) return false;
   draft.items.push({ pkg: pkgId, option });
   dropSlot();
@@ -82,6 +90,21 @@ export function toggle(id) {
 function dropSlot() {
   draft.slot = null;
   draft.heldAt = null;
+}
+
+/**
+ * Load an existing appointment into the draft so the diary can move it. Its
+ * treatments and therapist come across; the time is what is being chosen.
+ */
+export function startReschedule(booking, member = {}) {
+  draft = {
+    ...EMPTY,
+    items: (booking.items || []).map((i) => ({ ...i })),
+    therapist: booking.therapist || "any",
+    reschedule: booking.id,
+    name: member.name || "", phone: member.phone || "", email: member.email || "",
+  };
+  save();
 }
 
 /* ------------------------------------------------------------------ hold */
